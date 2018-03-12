@@ -3,18 +3,6 @@ $script = <<SCRIPT
 
 export DEBIAN_FRONTEND=noninteractive
 
-# MariaDB repo
-sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xcbcb082a1bb943db
-sudo add-apt-repository 'deb [arch=amd64,i386] http://lon1.mirrors.digitalocean.com/mariadb/repo/10.1/ubuntu trusty main'
-
-cat << 'EOF' > /tmp/mariadb.pref
-Package: *
-Pin: origin lon1.mirrors.digitalocean.com
-Pin-Priority: 1000
-EOF
-sudo mv /tmp/mariadb.pref /etc/apt/preferences.d/mariadb.pref
-# MariaDB repo
-
 # PHP 7 repo
 sudo add-apt-repository -y ppa:ondrej/php
 # PHP 7 repo
@@ -23,12 +11,12 @@ sudo apt-get update
 
 sudo apt-get install -y -q nginx
 
-sudo apt-get install -y -q php7.0-fpm
-sudo apt-get install -y -q php7.0-mysql
-sudo apt-get install -y -q php7.0-mbstring
-sudo apt-get install -y -q php7.0-simplexml # composer dependency
-sudo apt-get install -y -q php7.0-curl      # composer dependency
-sudo apt-get install -y -q php7.0-zip       # composer dependency
+sudo apt-get install -y -q php7.2-fpm
+sudo apt-get install -y -q php7.2-mysql
+sudo apt-get install -y -q php7.2-mbstring
+sudo apt-get install -y -q php7.2-simplexml # composer dependency
+sudo apt-get install -y -q php7.2-curl      # composer dependency
+sudo apt-get install -y -q php7.2-zip       # composer dependency
 
 sudo rm /etc/nginx/sites-available/default
 sudo touch /etc/nginx/sites-available/default
@@ -68,7 +56,7 @@ server {
   location ~ \.php$ {
     try_files $uri =404;
     fastcgi_split_path_info ^(.+\.php)(/.+)$;
-    fastcgi_pass unix:/var/run/php/php7.0-fpm.sock;
+    fastcgi_pass unix:/var/run/php/php7.2-fpm.sock;
     fastcgi_index index.php;
     include fastcgi_params;
   }
@@ -84,7 +72,7 @@ server {
       root /usr/share/;
 
       # Point it to the fpm socket;
-      fastcgi_pass unix:/var/run/php/php7.0-fpm.sock;
+      fastcgi_pass unix:/var/run/php/php7.2-fpm.sock;
       fastcgi_index index.php;
       fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
       include /etc/nginx/fastcgi_params;
@@ -99,22 +87,52 @@ server {
   }
   ### phpMyAdmin ###
 }
+
+server {
+    listen 80;
+
+    root /vagrant/laravel/public;
+    index index.php index.html index.htm;
+
+    server_name laravel.devx;
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        try_files $uri /index.php =404;
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        fastcgi_pass unix:/var/run/php/php7.2-fpm.sock;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+}
+
 EOF
 
 sudo mv /tmp/default /etc/nginx/sites-available/default
 
 sudo service nginx restart
 
-sudo service php7.0-fpm restart
+sudo service php7.2-fpm restart
 
 debconf-set-selections <<< 'mariadb-server-5.5 mysql-server/root_password password rootpass'
 debconf-set-selections <<< 'mariadb-server-5.5 mysql-server/root_password_again password rootpass'
-sudo apt-get install -y -q mariadb-server
+sudo apt-get install mysql-server
 mysql -uroot -prootpass -e "SET PASSWORD = PASSWORD('');"
 
 # Install composer
 sudo apt-get install -y -q curl git
 curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
+
+
+# install nvm
+curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.0/install.sh | bash
+
+# install npm
+nvm install --lts
 
 # Install phpmyadmin from source
 wget -q https://github.com/phpmyadmin/phpmyadmin/archive/STABLE.tar.gz -O /tmp/phpmyadmin.tar.gz
@@ -184,7 +202,7 @@ Vagrant.configure(2) do |config|
 
   config.vm.provider "virtualbox" do |vb|
     vb.gui = false
-    vb.memory = "1024"
+    vb.memory = "4096"
   end
 
   #config.vm.provision "shell", path: "provision.sh"
